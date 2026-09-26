@@ -12,7 +12,6 @@ def load_data(path):
         print(f"  [skip] {path} not found")
         return None
     
-    # Removed the invalid empty_as_null parameter
     df = pl.read_csv(path, separator=DELIM, infer_schema_length=0)
     print(f"  loaded {os.path.basename(path)}: {df.height:,} rows, cols={df.columns}")
     return df
@@ -127,8 +126,12 @@ def profile_ground_truth(gt, s1, s2, s3):
             print(f"  cross-source country agreement: {checked-mismatches:,}/{checked:,} ({(checked-mismatches)/checked:.1%}) — {'safe to block on country' if mismatches/checked < 0.01 else 'NOT always equal'}")
 
 def main():
-    train_dir = "dataset/train"
-    test_dir = "dataset/test"
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--data-dir", default="dataset")
+    args = ap.parse_args()
+
+    train_dir = os.path.join(args.data_dir, "train")
+    test_dir = os.path.join(args.data_dir, "test")
 
     print("=== TRAIN ===")
     train_paths = [

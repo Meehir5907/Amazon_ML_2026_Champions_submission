@@ -25,12 +25,16 @@ def sample_script(df, source_label, script_name, regex_pattern, n):
         print(f"    {row['entity_id']}\t{row['business_name']}\t{row['business_address']}\t{row['country']}")
 
 def main():
-    n = 8
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--data-dir", default="dataset")
+    ap.add_argument("--n", type=int, default=8)
+    args = ap.parse_args()
+
     files = [
-        ("train_source2", "dataset/train/train_source2.tsv"),
-        ("train_source3", "dataset/train/train_source3.tsv"),
-        ("test_source2", "dataset/test/test_source2.tsv"),
-        ("test_source3", "dataset/test/test_source3.tsv"),
+        ("train_source2", os.path.join(args.data_dir, "train", "train_source2.tsv")),
+        ("train_source3", os.path.join(args.data_dir, "train", "train_source3.tsv")),
+        ("test_source2", os.path.join(args.data_dir, "test", "test_source2.tsv")),
+        ("test_source3", os.path.join(args.data_dir, "test", "test_source3.tsv")),
     ]
 
     for label, path in files:
@@ -41,7 +45,7 @@ def main():
         print(f"\n=== {label} ({df.height:,} rows) ===")
         
         for script_name, regex_pattern in SCRIPT_RANGES.items():
-            sample_script(df, label, script_name, regex_pattern, n)
+            sample_script(df, label, script_name, regex_pattern, args.n)
 
 if __name__ == "__main__":
     main()
