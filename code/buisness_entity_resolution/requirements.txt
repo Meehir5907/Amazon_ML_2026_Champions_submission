@@ -2,3 +2,5 @@ polars==1.44.2
 epitran==1.35.2
 g2p-en==2.1.0
 panphon==0.22.2
+scikit-learn==1.9.1
+faiss-cpu==1.15.1
