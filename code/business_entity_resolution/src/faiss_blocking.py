@@ -1,91 +1,71 @@
 import os
-import time
+import torch
 import polars as pl
 import numpy as np
 import faiss
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.decomposition import TruncatedSVD
-from sklearn.preprocessing import normalize
+from sentence_transformers import SentenceTransformer
 
-def create_dense_embeddings(texts: list[str], vectorizer=None, svd=None, fit=False):
-    if fit:
-        vectorizer = TfidfVectorizer(analyzer='char_wb', ngram_range=(2, 4), min_df=2)
-        svd = TruncatedSVD(n_components=128, random_state=42)
+model_global = None
+
+def fetch_embedding_model():
+    global model_global
+    if model_global is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model_global = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2", device=device)
+    return model_global
+
+def create_dense_embeddings(list_texts: list[str], model_embed: SentenceTransformer):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    matrix_dense = model_embed.encode(
+        list_texts,
+        batch_size=512,
+        device=device,
+        show_progress_bar=True,
+        normalize_embeddings=True
+    )
+    return np.ascontiguousarray(matrix_dense, dtype=np.float32)
+
+def build_faiss_index(matrix_embed: np.ndarray):
+    dim_size = matrix_embed.shape[1]
+    index_faiss = faiss.IndexFlatIP(dim_size)
+    index_faiss.add(matrix_embed)
+    return index_faiss
+
+def retrieve_candidates(matrix_query: np.ndarray, index_faiss: faiss.Index, list_targets: list[str], k: int = 50, **kwargs):
+    search_k = kwargs.get("val_k", k)
+    _, matrix_indices = index_faiss.search(matrix_query, search_k)
+    list_results = []
+    
+    for array_neighbors in matrix_indices:
+        list_matched = [list_targets[idx] for idx in array_neighbors if idx != -1]
+        list_results.append(list_matched)
         
-        tfidf_matrix = vectorizer.fit_transform(texts)
-        dense_matrix = svd.fit_transform(tfidf_matrix)
-        dense_matrix = normalize(dense_matrix, norm='l2', axis=1)
-        
-        return np.ascontiguousarray(dense_matrix, dtype=np.float32), vectorizer, svd
-    else:
-        tfidf_matrix = vectorizer.transform(texts)
-        dense_matrix = svd.transform(tfidf_matrix)
-        dense_matrix = normalize(dense_matrix, norm='l2', axis=1)
-        
-        return np.ascontiguousarray(dense_matrix, dtype=np.float32)
+    return list_results
 
-def build_faiss_index(embeddings: np.ndarray):
-    dim = embeddings.shape[1]
-    index = faiss.IndexFlatIP(dim)
-    index.add(embeddings)
-    return index
+def block_by_country(frame_s1: pl.DataFrame, frame_target: pl.DataFrame, label_country: str, k: int = 50, **kwargs):
+    search_k = kwargs.get("val_k", k)
+    frame_sub_s1 = frame_s1.filter(pl.col("country") == label_country)
+    frame_sub_target = frame_target.filter(pl.col("country") == label_country)
 
-def retrieve_candidates(query_embeddings: np.ndarray, index: faiss.Index, target_ids: list[str], k=15):
-    distances, indices = index.search(query_embeddings, k)
+    if frame_sub_s1.height == 0 or frame_sub_target.height == 0:
+        return pl.DataFrame()
 
-    results = []
-    for row_idx, neighbor_indices in enumerate(indices):
-        matched_ids = [target_ids[idx] for idx in neighbor_indices if idx != -1]
-        results.append(matched_ids)
+    list_names_s1 = frame_sub_s1["business_name"].fill_null("").to_list()
+    list_names_target = frame_sub_target["business_name"].fill_null("").to_list()
+    list_ids_target = frame_sub_target["entity_id"].to_list()
+    list_ids_s1 = frame_sub_s1["entity_id"].to_list()
+    
+    model_embed = fetch_embedding_model()
 
-    return results
+    print(f"  Encoding {len(list_names_target):,} target records for {label_country}...")
+    matrix_target = create_dense_embeddings(list_names_target, model_embed)
+    index_faiss = build_faiss_index(matrix_target)
 
-def block_by_country(s1_df: pl.DataFrame, target_df: pl.DataFrame, country: str, k=15):
-    s1_subset = s1_df.filter(pl.col("country") == country)
-    target_subset = target_df.filter(pl.col("country") == country)
-
-    if s1_subset.height == 0 or target_subset.height == 0:
-        return []
-
-    s1_texts = s1_subset["business_name_ipa"].fill_null("").to_list()
-    target_texts = target_subset["business_name_ipa"].fill_null("").to_list()
-    target_ids = target_subset["entity_id"].to_list()
-    s1_ids = s1_subset["entity_id"].to_list()
-
-    all_texts = s1_texts + target_texts
-    _, trained_vec, trained_svd = create_dense_embeddings(all_texts, fit=True)
-
-    target_embeddings = create_dense_embeddings(target_texts, trained_vec, trained_svd, fit=False)
-    index = build_faiss_index(target_embeddings)
-
-    s1_embeddings = create_dense_embeddings(s1_texts, trained_vec, trained_svd, fit=False)
-    candidate_lists = retrieve_candidates(s1_embeddings, index, target_ids, k)
+    print(f"  Encoding {len(list_names_s1):,} S1 query records for {label_country}...")
+    matrix_s1 = create_dense_embeddings(list_names_s1, model_embed)
+    list_candidates = retrieve_candidates(matrix_s1, index_faiss, list_ids_target, k=search_k)
 
     return pl.DataFrame({
-        "source1_entity_id": s1_ids,
-        "matched_entity_ids": candidate_lists
+        "source1_entity_id": list_ids_s1,
+        "matched_entity_ids": list_candidates
     })
-
-if __name__ == "__main__":
-    init_s1 = "dataset/train/train_source1.tsv"
-    init_s2 = "dataset/train/train_source2.tsv"
-
-    if os.path.isfile(init_s1) and os.path.isfile(init_s2):
-        frame_s1 = pl.read_csv(init_s1, separator="\t", infer_schema_length=0).head(1000)
-        frame_s2 = pl.read_csv(init_s2, separator="\t", infer_schema_length=0).head(5000)
-
-        frame_s1 = frame_s1.with_columns(pl.col("business_name").alias("business_name_ipa"))
-        frame_s2 = frame_s2.with_columns(pl.col("business_name").alias("business_name_ipa"))
-
-        target_country = frame_s1["country"].drop_nulls()[0]
-
-        start_time = time.time()
-        print(f"Running FAISS index and retrieval for: {target_country}")
-
-        results_frame = block_by_country(frame_s1, frame_s2, target_country, k=5)
-
-        print(f"Completed in {time.time() - start_time:.2f} seconds.")
-        if isinstance(results_frame, pl.DataFrame):
-            print(results_frame.head(10))
-        else:
-            print("No matches found.")
