@@ -173,7 +173,7 @@ if __name__ == "__main__":
     init_s2 = "dataset/train/train_source2.tsv"
     init_s3 = "dataset/train/train_source3.tsv"
     init_truth = "dataset/train/train_ground_truth.tsv"
-    model_output = "code/buisness_entity_resolution/models/xgb_model.pkl"
+    model_output = "code/business_entity_resolution/models/xgb_model.pkl"
 
     if all(os.path.isfile(p) for p in (init_s1, init_s2, init_s3, init_truth)):
         # Load the full datasets into memory
