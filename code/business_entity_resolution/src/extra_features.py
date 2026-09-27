@@ -16,11 +16,11 @@ def is_acronym_match(name_a: str, name_b: str) -> float:
 
     if not tokens_a or not tokens_b: return 0.0
 
-    acronym_a = "".join(t[0] for t in tokens_a)
-    acronym_b = "".join(t[0] for t in tokens_b)
+    acronym_a = "".join(t[0] for t in tokens_a).upper()
+    acronym_b = "".join(t[0] for t in tokens_b).upper()
 
-    if len(tokens_a) == 1 and name_a == acronym_b and len(acronym_b) >= 2: return 1.0
-    if len(tokens_b) == 1 and name_b == acronym_a and len(acronym_a) >= 2: return 1.0
+    if len(tokens_a) == 1 and name_a.upper() == acronym_b and len(acronym_b) >= 2: return 1.0
+    if len(tokens_b) == 1 and name_b.upper() == acronym_a and len(acronym_a) >= 2: return 1.0
     return 0.0
 
 def add_extended_features(frame_features: pl.DataFrame, frame_s1: pl.DataFrame, frame_target: pl.DataFrame) -> pl.DataFrame:
