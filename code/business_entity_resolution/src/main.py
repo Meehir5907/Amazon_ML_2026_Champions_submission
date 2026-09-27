@@ -103,6 +103,6 @@ if __name__ == "__main__":
         init_s2="dataset/test/test_source2.tsv",
         init_s3="dataset/test/test_source3.tsv",
         init_model="code/business_entity_resolution/models/xgb_model.pkl",
-        init_out_cand="candidate_pairs.tsv",
-        init_out_match="matching_results.tsv"
+        init_out_cand="output/candidate_pairs.tsv",
+        init_out_match="output/matching_results.tsv"
     )
