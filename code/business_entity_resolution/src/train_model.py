@@ -36,7 +36,7 @@ def build_candidates_and_features(frame_s1, frame_target, source_label):
     countries = frame_s1["country"].drop_nulls().unique().to_list()
     list_candidates = []
     for country in countries:
-        candidates = block_by_country(frame_s1, frame_target, country, k=10)
+        candidates = block_by_country(frame_s1, frame_target, country, k=50)
         if isinstance(candidates, pl.DataFrame) and candidates.height > 0:
             list_candidates.append(candidates)
     if not list_candidates:
