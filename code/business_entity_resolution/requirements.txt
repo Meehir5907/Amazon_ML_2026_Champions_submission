@@ -4,3 +4,5 @@ g2p-en==2.1.0
 panphon==0.22.2
 scikit-learn==1.9.1
 faiss-cpu==1.15.1
+pyarrow==25.0.1
+xgboost==3.4.1
