@@ -6,3 +6,4 @@ output/*.tsv
 __pycache__/
 code/*/models/
 *.pkl
+*phonetic_cache.json
