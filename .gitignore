@@ -4,3 +4,5 @@ output/*.tsv
 *.parquet
 .venv/
 __pycache__/
+code/*/models/
+*.pkl
